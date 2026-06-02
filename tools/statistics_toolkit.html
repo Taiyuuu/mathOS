@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistics Toolkit</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjs@12.4.1/lib/browser/math.js"></script>
+    <style>
+        * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        *::-webkit-scrollbar {
+            display: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .toolbar {
+            background: #1d1d1e;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #252528;
+        }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: #2c2c2e;
+            padding: 4px;
+            border-radius: 8px;
+        }
+        .tab {
+            padding: 6px 16px;
+            font-size: 13px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #aaa;
+        }
+        .tab.active {
+            background: #3a3a3c;
+            color: white;
+        }
+        .content {
+            flex: 1;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+            align-items: center;
+        }
+        .input-card {
+            width: 100%;
+            max-width: 800px;
+            background: #1c1c1e;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid #2c2c2e;
+        }
+        .option-card {
+            width: 100%;
+            max-width: 800px;
+            background: #1c1c1e;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid #2c2c2e;
+            display: none;
+        }
+        .input-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            min-height: 80px;
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+            border-radius: 12px;
+            padding: 12px;
+            color: white;
+            font-size: 16px;
+            font-family: "SF Mono", "Menlo", monospace;
+            outline: none;
+            resize: none;
+            box-sizing: border-box;
+            overflow-y: hidden;
+        }
+        textarea:focus { border-color: #007aff; }
+
+        .btn-remove {
+            background: #ff5b60;
+            border: none;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+            opacity: 0.7;
+            transition: 0.2s;
+        }
+        .btn-remove:hover { opacity: 1; }
+
+        .text-input-small {
+            width: 100%;
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+            border-radius: 8px;
+            padding: 10px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .btn-calc {
+            background: #007aff;
+            border: none;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+            margin-top: 10px;
+        }
+        .stat-box {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 14px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-name { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 6px; }
+        .stat-value { font-size: 24px; font-weight: 300; color: #007aff; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+<div class="toolbar">
+    <div class="tabs">
+        <div class="tab active" id="tabNumeric" onclick="switchMode('numeric')">Numerical</div>
+        <div class="tab" id="tabText" onclick="switchMode('text')">Text</div>
+    </div>
+    <button class="btn-calc" onclick="calculate()">Analyze</button>
+</div>
+
+<div class="content">
+    <div class="input-card">
+        <label id="inputLabel" class="input-label">Enter Dataset (Numbers separated by commas or spaces)</label>
+        <textarea id="dataInput" placeholder="Enter content here..."></textarea>
+    </div>
+
+    <div id="textOptions" class="option-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <label class="input-label" style="margin-bottom: 0;">Target Strings / Characters</label>
+            <button class="btn-calc" style="background: #3a3a3c; padding: 4px 10px; font-size: 11px;" onclick="addTargetOption()">+ Add</button>
+        </div>
+        <div id="targetOptionsContainer" style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="target-row" style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" class="text-input-small target-input" placeholder="Character or string to analyze/exclude...">
+            </div>
+        </div>
+    </div>
+
+    <div id="results" class="stats-grid" style="display: none;">
+        <div class="stat-box">
+            <div class="stat-name">Count (n)</div>
+            <div id="stat-count" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Mean (μ)</div>
+            <div id="stat-mean" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Median</div>
+            <div id="stat-median" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Mode</div>
+            <div id="stat-mode" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Std. Deviation (σ)</div>
+            <div id="stat-std" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Variance (σ²)</div>
+            <div id="stat-var" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Min</div>
+            <div id="stat-min" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Max</div>
+            <div id="stat-max" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Range</div>
+            <div id="stat-range" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Sum (Σ)</div>
+            <div id="stat-sum" class="stat-value">0</div>
+        </div>
+    </div>
+
+    <div id="textResults" class="stats-grid" style="display: none;">
+        <div class="stat-box">
+            <div class="stat-name">Words</div>
+            <div id="text-words" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Unique Words</div>
+            <div id="text-unique" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Characters</div>
+            <div id="text-chars" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Chars (No Target)</div>
+            <div id="text-chars-no-target" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Target Matches</div>
+            <div id="text-target-matches" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Read Time</div>
+            <div id="text-read-time" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Speak Time</div>
+            <div id="text-speak-time" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Most Used Word</div>
+            <div id="text-most-used" class="stat-value" style="font-size: 18px;">-</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Sentences</div>
+            <div id="text-sentences" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Paragraphs</div>
+            <div id="text-paragraphs" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Avg. Sent. Length</div>
+            <div id="text-avg-sent" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Avg. Word Length</div>
+            <div id="text-avg-word" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">Avg. Syllables</div>
+            <div id="text-avg-syl" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-name">FK Grade Level</div>
+            <div id="text-fk-grade" class="stat-value">0</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentMode = 'numeric';
+
+    function switchMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab' + (mode === 'numeric' ? 'Numeric' : 'Text')).classList.add('active');
+        
+        document.getElementById('inputLabel').textContent = mode === 'numeric' 
+            ? 'Enter Dataset (Numbers separated by commas or spaces)' 
+            : 'Enter Text Content';
+        
+        document.getElementById('textOptions').style.display = mode === 'text' ? 'block' : 'none';
+        document.getElementById('results').style.display = 'none';
+        document.getElementById('textResults').style.display = 'none';
+    }
+
+    function countSyllables(text) {
+        const words = text.toLowerCase().match(/\b[a-z]{1,}\b/g) || [];
+        let total = 0;
+        words.forEach(word => {
+            if (word.length <= 3) { total += 1; return; }
+            word = word.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '');
+            word = word.replace(/^y/, '');
+            const vowels = word.match(/[aeiouy]{1,2}/g);
+            total += vowels ? vowels.length : 1;
+        });
+        return total;
+    }
+
+    function addTargetOption() {
+        const container = document.getElementById('targetOptionsContainer');
+        const row = document.createElement('div');
+        row.className = 'target-row';
+        row.style.display = 'flex';
+        row.style.gap = '10px';
+        row.style.alignItems = 'center';
+        row.style.animation = 'fadeIn 0.2s ease-out';
+        row.innerHTML = `
+            <input type="text" class="text-input-small target-input" placeholder="Character or string...">
+            <button class="btn-remove" onclick="this.parentElement.remove()">×</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function calculateTextStats(text) {
+        const targetInputs = Array.from(document.querySelectorAll('.target-input'));
+        const targets = targetInputs.map(i => i.value).filter(v => v !== "");
+        
+        const words = text.match(/\b\w+\b/g) || [];
+        const uniqueWords = new Set(words.map(w => w.toLowerCase()));
+        const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+        
+        // Most used word
+        const freq = {};
+        let maxFreq = 0;
+        words.forEach(w => {
+            const word = w.toLowerCase();
+            freq[word] = (freq[word] || 0) + 1;
+            if (freq[word] > maxFreq) {
+                maxFreq = freq[word];
+            }
+        });
+
+        let mostUsed = '-';
+        if (maxFreq > 0) {
+            const topWords = Object.keys(freq).filter(word => freq[word] === maxFreq);
+            mostUsed = topWords.join(', ') + ` (${maxFreq})`;
+        }
+
+        const totalSyllables = countSyllables(text);
+        const fkGrade = (0.39 * (words.length / (sentences.length || 1))) + (11.8 * (totalSyllables / (words.length || 1))) - 15.59;
+
+        let matchesHtml = "";
+        let textWithoutTargets = text;
+
+        targets.forEach(t => {
+            const count = (text.match(new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+            matchesHtml += `<div style="font-size: 14px; color: #aaa; margin-top: 4px;">${t}: <span style="color: #007aff;">${count}</span></div>`;
+            textWithoutTargets = textWithoutTargets.split(t).join('');
+        });
+
+        document.getElementById('text-words').textContent = words.length;
+        document.getElementById('text-unique').textContent = uniqueWords.size;
+        document.getElementById('text-chars').textContent = text.length;
+        document.getElementById('text-chars-no-target').textContent = textWithoutTargets.length;
+        document.getElementById('text-target-matches').innerHTML = targets.length > 0 
+            ? `<div style="text-align: left; display: inline-block;">${matchesHtml}</div>` 
+            : "0";
+        
+        const readMinutes = words.length / 225;
+        const speakMinutes = words.length / 140;
+        document.getElementById('text-read-time').textContent = readMinutes < 1 ? Math.round(readMinutes * 60) + 's' : Math.round(readMinutes) + 'm';
+        document.getElementById('text-speak-time').textContent = speakMinutes < 1 ? Math.round(speakMinutes * 60) + 's' : Math.round(speakMinutes) + 'm';
+        
+        document.getElementById('text-most-used').textContent = mostUsed;
+        document.getElementById('text-sentences').textContent = sentences.length;
+        document.getElementById('text-paragraphs').textContent = paragraphs.length;
+        document.getElementById('text-avg-sent').textContent = (words.length / (sentences.length || 1)).toFixed(1);
+        document.getElementById('text-avg-word').textContent = (text.replace(/\s+/g, '').length / (words.length || 1)).toFixed(1);
+        document.getElementById('text-avg-syl').textContent = (totalSyllables / (words.length || 1)).toFixed(2);
+        document.getElementById('text-fk-grade').textContent = fkGrade.toFixed(1);
+    }
+
+    function calculateNumericStats(input) {
+        // Parse numbers, filtering out non-numeric entries
+        const dataset = input.split(/[,\s]+/)
+                             .map(n => parseFloat(n))
+                             .filter(n => !isNaN(n));
+
+        if (dataset.length === 0) return;
+
+        try {
+            const results = document.getElementById('results');
+            results.style.display = 'grid';
+
+            const format = (val) => {
+                if (Array.isArray(val)) return val.join(', ');
+                return math.format(val, { precision: 6, notation: 'auto' });
+            };
+
+            // Use math.js for robust statistical functions
+            document.getElementById('stat-count').textContent = dataset.length;
+            document.getElementById('stat-mean').textContent = format(math.mean(dataset));
+            document.getElementById('stat-median').textContent = format(math.median(dataset));
+            
+            const modeResult = math.mode(dataset);
+            document.getElementById('stat-mode').textContent = format(modeResult);
+            
+            document.getElementById('stat-std').textContent = format(math.std(dataset));
+            document.getElementById('stat-var').textContent = format(math.variance(dataset));
+            
+            const min = math.min(dataset);
+            const max = math.max(dataset);
+            document.getElementById('stat-min').textContent = format(min);
+            document.getElementById('stat-max').textContent = format(max);
+            document.getElementById('stat-range').textContent = format(max - min);
+            document.getElementById('stat-sum').textContent = format(math.sum(dataset));
+
+        } catch (e) {
+            alert("Error processing statistics. Ensure your data is valid.");
+        }
+    }
+
+    function calculate() {
+        const input = document.getElementById('dataInput').value;
+        if (currentMode === 'numeric') {
+            calculateNumericStats(input);
+        } else {
+            document.getElementById('textResults').style.display = 'grid';
+            calculateTextStats(input);
+        }
+    }
+
+    // Auto-expand textarea as user types
+    const dataInput = document.getElementById('dataInput');
+    dataInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Allow Enter key to trigger analysis (Shift+Enter for new line in textarea)
+    dataInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            calculate();
+        }
+    });
+</script>
+</body>
+</html>

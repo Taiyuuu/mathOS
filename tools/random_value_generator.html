@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Value Generator</title>
+    <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.min.js"></script>
+    <style>
+        * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        *::-webkit-scrollbar {
+            display: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .toolbar {
+            background: #1d1d1e;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #252528;
+        }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: #2c2c2e;
+            padding: 4px;
+            border-radius: 8px;
+        }
+        .tab {
+            padding: 6px 16px;
+            font-size: 13px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #aaa;
+        }
+        .tab.active {
+            background: #3a3a3c;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .content {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+            overflow-y: auto;
+        }
+        .generator-card {
+            width: 100%;
+            max-width: 450px;
+            background: #1c1c1e;
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid #2c2c2e;
+            display: none;
+        }
+        .generator-card.active { display: block; }
+        
+        .input-group { margin-bottom: 16px; }
+        .input-group label {
+            display: block;
+            font-size: 11px;
+            color: #8e8e93;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+        input[type="number"], input[type="text"] {
+            width: 100%;
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+            border-radius: 8px;
+            padding: 10px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #ddd;
+            cursor: pointer;
+        }
+        .radio-group { display: flex; gap: 15px; margin-top: 5px; }
+        .radio-group label { font-size: 13px; color: #ddd; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+        input[type="checkbox"] { accent-color: #007aff; scale: 1.2; }
+
+        .btn-generate {
+            width: 100%;
+            background: #007aff;
+            border: none;
+            color: white;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+        .btn-generate:hover { background: #0a84ff; transform: scale(1.01); }
+
+        .result-panel {
+            width: 100%;
+            max-width: 450px;
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 20px;
+            padding: 24px;
+            max-height: 250px;
+            overflow-y: auto;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .strength-meter {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #222;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            display: none;
+        }
+        .strength-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666; }
+        .strength-bar { height: 4px; background: #222; border-radius: 2px; width: 100%; overflow: hidden; }
+        .strength-fill { height: 100%; width: 0%; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .crack-info { font-size: 11px; color: #888; }
+        .crack-time { font-weight: 700; }
+
+        .result-value {
+            font-size: 42px;
+            font-weight: 300;
+            color: #007aff;
+            word-break: break-all;
+            margin-bottom: 15px;
+            transition: font-size 0.2s;
+        }
+
+        .color-num { color: #ff9b00; }
+        .color-sym { color: #ff5b60; }
+        .color-word { color: #007aff; }
+        .color-sep { color: #444; }
+        .color-let { color: #fff; }
+
+        .btn-copy {
+            background: #2c2c2e;
+            border: none;
+            color: #007aff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div class="toolbar">
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('number')">Number</div>
+        <div class="tab" onclick="switchTab('word')">Word</div>
+        <div class="tab" onclick="switchTab('password')">Password</div>
+    </div>
+</div>
+
+<div class="content">
+    <!-- Number Generator -->
+    <div id="numberCard" class="generator-card active">
+        <div class="input-group">
+            <label>Range (Min - Max)</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" id="numMin" value="1">
+                <input type="number" id="numMax" value="100">
+            </div>
+        </div>
+        <div class="input-group">
+            <label>Amount</label>
+            <input type="number" id="numCount" value="1" min="1" max="500">
+        </div>
+        <button class="btn-generate" onclick="generateNumber()">Generate Numbers</button>
+    </div>
+
+    <!-- Word Generator -->
+    <div id="wordCard" class="generator-card">
+        <div class="input-group">
+            <label>Amount</label>
+            <input type="number" id="wordCount" value="1" min="1" max="100">
+        </div>
+        <p style="color: #8e8e93; font-size: 13px; text-align: center; margin-bottom: 20px;">
+            Picks random words from the internal library.
+        </p>
+        <button class="btn-generate" onclick="generateWord()">Generate Words</button>
+    </div>
+
+    <!-- Password Generator -->
+    <div id="passwordCard" class="generator-card">
+        <div class="input-group">
+            <label>Type</label>
+            <div class="radio-group">
+                <label><input type="radio" name="passType" value="password" checked onchange="updatePassUI()"> Password</label>
+                <label><input type="radio" name="passType" value="passphrase" onchange="updatePassUI()"> Passphrase</label>
+            </div>
+        </div>
+        <div class="input-group">
+            <label id="passLenLabel">Length (Characters)</label>
+            <input type="number" id="passLen" value="16" min="1" max="128">
+        </div>
+        <div id="passOptions" class="checkbox-group">
+            <label><input type="checkbox" id="passUpper" checked> Uppercase</label>
+            <label><input type="checkbox" id="passLower" checked> Lowercase</label>
+            <label><input type="checkbox" id="passNumber" checked> Numbers</label>
+            <label><input type="checkbox" id="passSymbols" checked> Symbols</label>
+        </div>
+        <div id="phraseOptions" class="checkbox-group" style="display: none;">
+            <label><input type="checkbox" id="passCap" checked> Capitalize</label>
+            <label><input type="checkbox" id="passNum" checked> Include Number</label>
+        </div>
+        <div class="input-group" id="sepGroup" style="display: none; margin-top: 15px;">
+            <label>Separator</label>
+            <input type="text" id="passSep" value="-" style="width: 60px; text-align: center;">
+        </div>
+        <button class="btn-generate" onclick="generatePassword()">Generate Password</button>
+    </div>
+
+    <div id="resultPanel" class="result-panel">
+        <div id="resultValue" class="result-value">...</div>
+        <div id="strengthMeter" class="strength-meter">
+            <div class="strength-label">Security Analysis</div>
+            <div class="strength-bar"><div id="strengthFill" class="strength-fill"></div></div>
+            <div class="crack-info">Time to crack (Offline): <span id="crackTime" class="crack-time">Instant</span></div>
+        </div>
+        <div style="margin-top: 20px;">
+            <button id="editBtn" class="btn-copy" onclick="toggleEdit()" style="display: none; margin-right: 8px;">Edit</button>
+            <button class="btn-copy" onclick="copyResult()">Copy to Clipboard</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchTab(type) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.generator-card').forEach(c => c.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById(type + 'Card').classList.add('active');
+        document.getElementById('strengthMeter').style.display = 'none';
+        document.getElementById('editBtn').style.display = (type === 'password') ? 'inline-block' : 'none';
+        
+        // Reset edit mode
+        const el = document.getElementById('resultValue');
+        el.contentEditable = "false";
+        el.style.outline = "none";
+        document.getElementById('editBtn').textContent = "Edit";
+        isEditing = false;
+    }
+
+    function updatePassUI() {
+        const isPassphrase = document.querySelector('input[name="passType"]:checked').value === 'passphrase';
+        document.getElementById('passLenLabel').textContent = isPassphrase ? 'Word Count' : 'Length (Characters)';
+        document.getElementById('sepGroup').style.display = isPassphrase ? 'block' : 'none';
+        document.getElementById('passOptions').style.display = isPassphrase ? 'none' : 'grid';
+        document.getElementById('phraseOptions').style.display = isPassphrase ? 'grid' : 'none';
+    }
+
+    function adjustResultFontSize(text) {
+        const el = document.getElementById('resultValue');
+        if (text.length > 100) el.style.fontSize = '18px';
+        else if (text.length > 50) el.style.fontSize = '24px';
+        else if (text.length > 20) el.style.fontSize = '32px';
+        else el.style.fontSize = '42px';
+    }
+
+    function updateSecurityAnalysis(text) {
+        const meter = document.getElementById('strengthMeter');
+        const fill = document.getElementById('strengthFill');
+        const crackLabel = document.getElementById('crackTime');
+        
+        if (!text || typeof zxcvbn !== 'function') {
+            meter.style.display = 'none';
+            return;
+        }
+
+        const result = zxcvbn(text);
+        meter.style.display = 'flex';
+
+        let pct = (result.score + 1) * 20;
+        const colors = ["#ff5b60", "#ff5b60", "#ff9b00", "#28c840", "#28c840"];
+        let color = colors[result.score];
+
+        fill.style.width = pct + '%';
+        fill.style.background = color;
+        crackLabel.style.color = color;
+        crackLabel.textContent = result.crack_times_display.offline_slow_hashing_1e4_per_second;
+    }
+
+    let isEditing = false;
+    function toggleEdit() {
+        const el = document.getElementById('resultValue');
+        const btn = document.getElementById('editBtn');
+        isEditing = !isEditing;
+        
+        if (isEditing) {
+            el.contentEditable = "true";
+            el.focus();
+            el.style.outline = "1px solid #007aff";
+            el.style.borderRadius = "8px";
+            el.textContent = el.innerText; // Strip HTML highlighting for editing
+            btn.textContent = "Done";
+        } else {
+            el.contentEditable = "false";
+            el.style.outline = "none";
+            btn.textContent = "Edit";
+        }
+    }
+
+    let wordListCache = null;
+    async function getWords() {
+        if (wordListCache) return wordListCache;
+        try {
+            const response = await fetch('assets/words.txt');
+            const text = await response.text();
+            wordListCache = text.split('\n').map(w => w.trim()).filter(w => w.length > 0);
+            return wordListCache;
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function generateNumber() {
+        const min = parseInt(document.getElementById('numMin').value);
+        const max = parseInt(document.getElementById('numMax').value);
+        const count = Math.min(500, Math.max(1, parseInt(document.getElementById('numCount').value) || 1));
+        
+        let results = [];
+        for (let i = 0; i < count; i++) {
+            results.push(Math.floor(Math.random() * (max - min + 1)) + min);
+        }
+        const val = results.join(', ');
+        const el = document.getElementById('resultValue');
+        el.textContent = val;
+        document.getElementById('strengthMeter').style.display = 'none';
+        adjustResultFontSize(val);
+    }
+
+    async function generateWord() {
+        const count = Math.min(100, Math.max(1, parseInt(document.getElementById('wordCount').value) || 1));
+        try {
+            const words = await getWords();
+            
+            let results = [];
+            for (let i = 0; i < count; i++) {
+                results.push(words[Math.floor(Math.random() * words.length)]);
+            }
+            const val = results.join(', ');
+            const el = document.getElementById('resultValue');
+            el.textContent = val || "No words found";
+            document.getElementById('strengthMeter').style.display = 'none';
+            adjustResultFontSize(val);
+        } catch (e) {
+            document.getElementById('resultValue').textContent = "Error loading list";
+        }
+    }
+
+    async function generatePassword() {
+        if (isEditing) toggleEdit();
+        await getWords(); // Ensure analysis dictionary is loaded
+
+        const type = document.querySelector('input[name="passType"]:checked').value;
+        const length = parseInt(document.getElementById('passLen').value);
+        let html = "";
+        let plainText = "";
+
+        if (type === 'password') {
+            const lower = "abcdefghijklmnopqrstuvwxyz";
+            const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const num = "0123456789";
+            const sym = "!@#$%^&*()-_=+[]{}|;:,.<>?";
+            
+            let charset = "";
+            let poolSize = 0;
+
+            if (document.getElementById('passUpper').checked) { charset += upper; poolSize += 26; }
+            if (document.getElementById('passLower').checked) { charset += lower; poolSize += 26; }
+            if (document.getElementById('passNumber').checked) { charset += num; poolSize += 10; }
+            if (document.getElementById('passSymbols').checked) { charset += sym; poolSize += sym.length; }
+            
+            if (!charset) { charset = lower; poolSize = 26; }
+            
+            for (let i = 0; i < length; ++i) {
+                const char = charset.charAt(Math.floor(Math.random() * charset.length));
+                plainText += char;
+                let cls = "color-let";
+                if (num.includes(char)) cls = "color-num";
+                else if (sym.includes(char)) cls = "color-sym";
+                html += `<span class="${cls}">${char}</span>`;
+            }
+
+        } else {
+            const words = await getWords();
+            const sep = document.getElementById('passSep').value || "";
+            const capitalize = document.getElementById('passCap').checked;
+            const includeNum = document.getElementById('passNum').checked;
+
+            let selected = [];
+            for (let i = 0; i < length; i++) {
+                let word = words[Math.floor(Math.random() * words.length)];
+                if (capitalize) word = word.charAt(0).toUpperCase() + word.slice(1);
+                selected.push(word);
+            }
+
+            // Build HTML with highlighting
+            selected.forEach((word, idx) => {
+                html += `<span class="color-word">${word}</span>`;
+                plainText += word;
+                if (idx < selected.length - 1) {
+                    html += `<span class="color-sep">${sep}</span>`;
+                    plainText += sep;
+                }
+            });
+
+            if (includeNum) {
+                const n = Math.floor(Math.random() * 100);
+                html += `<span class="color-num">${n}</span>`;
+                plainText += n;
+            }
+        }
+
+        const el = document.getElementById('resultValue');
+        el.innerHTML = html;
+        adjustResultFontSize(plainText);
+        updateSecurityAnalysis(plainText);
+    }
+
+    function copyResult() {
+        const val = document.getElementById('resultValue').innerText;
+        navigator.clipboard.writeText(val);
+        const btn = document.querySelector('.btn-copy');
+        const original = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => btn.textContent = original, 1500);
+    }
+
+    document.getElementById('resultValue').addEventListener('input', (e) => {
+        if (!isEditing) return;
+        const text = e.target.innerText;
+        adjustResultFontSize(text);
+        updateSecurityAnalysis(text);
+    });
+
+    // Pre-load words for real-time analysis
+    getWords();
+</script>
+</body>
+</html>
