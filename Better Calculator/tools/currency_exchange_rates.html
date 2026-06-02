@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Currency Exchange Rates</title>
+    <style>
+        * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            box-sizing: border-box;
+        }
+        *::-webkit-scrollbar {
+            display: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .toolbar {
+            background: #1d1d1e;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #252528;
+        }
+        .controls { display: flex; gap: 15px; align-items: center; }
+        .input-label { font-size: 11px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        select, input {
+            background: #2c2c2e;
+            border: 1px solid #3a3a3c;
+            color: white;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 14px;
+            outline: none;
+            transition: 0.2s;
+        }
+        select:focus, input:focus { border-color: #007aff; }
+
+        .content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .rates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 16px;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .rate-card {
+            background: #1c1c1e;
+            border: 1px solid #2c2c2e;
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .rate-card:hover { transform: translateY(-2px); background: #2c2c2e; border-color: #3a3a3c; }
+        .currency-code { font-size: 11px; color: #007aff; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; }
+        .currency-value { font-size: 20px; font-weight: 300; color: #fff; }
+        .symbol-highlight { color: #007aff; margin-right: 2px; font-weight: 600; font-size: 25px; vertical-align: baseline; opacity: 0.9; }
+        .currency-name { font-size: 10px; color: #8e8e93; margin-top: 8px; opacity: 0; transition: 0.2s; pointer-events: none; white-space: normal; line-height: 1.2; width: 100%; }
+        .rate-card:hover .currency-name { opacity: 1; }
+
+        .loading { color: #8e8e93; font-size: 14px; margin-top: 50px; font-weight: 400; }
+        
+        .btn-refresh {
+            background: #007aff;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-refresh:hover { background: #0a84ff; }
+    </style>
+</head>
+<body>
+<div class="toolbar">
+    <div class="controls">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span class="input-label">Amount</span>
+            <input type="number" id="amountInput" value="1" min="0" step="any" style="width: 120px;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span class="input-label">Base Currency</span>
+            <select id="baseCurrency"></select>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span class="input-label">Search</span>
+            <input type="text" id="searchInput" placeholder="Code or Name..." style="width: 150px;">
+        </div>
+    </div>
+    <button class="btn-refresh" id="refreshBtn">Update Rates</button>
+</div>
+
+<div class="content">
+    <div id="loading" class="loading">Initializing currencies...</div>
+    <div id="ratesGrid" class="rates-grid" style="display: none;"></div>
+</div>
+
+<script>
+    const API_HOST = 'https://api.frankfurter.dev/v2';
+    const ratesGrid = document.getElementById('ratesGrid');
+    const loading = document.getElementById('loading');
+    const baseSelect = document.getElementById('baseCurrency');
+    const amountInput = document.getElementById('amountInput');
+    const searchInput = document.getElementById('searchInput');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    let ratesData = {};
+    let currencyMetadata = [];
+
+    async function init() {
+        try {
+            const response = await fetch(`${API_HOST}/currencies`);
+            if (!response.ok) throw new Error();
+            const currencies = await response.json();
+            
+            currencyMetadata = [];
+            baseSelect.innerHTML = '';
+            if (Array.isArray(currencies)) {
+                currencies.forEach(item => {
+                    // Aggressively search for the currency code (3-letter uppercase)
+                    let code = item.iso_code || item.code || item.currency || item.quote || item.iso || item.id;
+                    if (!code || typeof code !== 'string' || code.length !== 3) {
+                        // Fallback: look for any property value that looks like a currency code
+                        for (const key in item) {
+                            if (typeof item[key] === 'string' && item[key].length === 3 && item[key] === item[key].toUpperCase()) {
+                                code = item[key];
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (code && code.length === 3) {
+                        const name = item.name || item.currency_name || code;
+                        const optText = name !== code ? `${code} (${name})` : code;
+                        const opt = new Option(optText, code);
+                        if (code === 'USD') opt.selected = true;
+                        baseSelect.add(opt);
+                        const symbol = item.symbol || '';
+                        currencyMetadata.push({ code, name, symbol });
+                    }
+                });
+            } else {
+                // Handle standard object format: { USD: 'US Dollar', ... }
+                Object.keys(currencies).forEach(code => {
+                    const name = currencies[code];
+                    const opt = new Option(`${code} (${name})`, code);
+                    if (code === 'USD') opt.selected = true;
+                    baseSelect.add(opt);
+                    currencyMetadata.push({ code, name, symbol: '' });
+                });
+            }
+
+            if (baseSelect.options.length === 0) {
+                throw new Error("No currencies found in API response");
+            }
+
+            await fetchRates();
+        } catch (e) {
+            loading.textContent = "Error: Unable to connect to Currency API.";
+        }
+    }
+
+    async function fetchRates() {
+        const base = baseSelect.value;
+        if (!base) return;
+
+        loading.style.display = 'block';
+        loading.textContent = `Fetching latest rates for ${base}...`;
+        ratesGrid.style.display = 'none';
+        
+        try {
+            // In v2, 'base' is used to set the source currency. 'from' is for start dates.
+            const response = await fetch(`${API_HOST}/rates?base=${base}`);
+            if (!response.ok) throw new Error();
+            const data = await response.json();
+            
+            // The new endpoint returns an array of objects based on the provided JSON structure
+            ratesData = { [base]: 1 };
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    const q = item.quote || item.currency || item.code;
+                    if (q) ratesData[q] = item.rate;
+                });
+            }
+
+            renderRates();
+            
+            loading.style.display = 'none';
+            ratesGrid.style.display = 'grid';
+        } catch (e) {
+            loading.textContent = "Failed to load exchange rates.";
+        }
+    }
+
+    function renderRates() {
+        const amount = parseFloat(amountInput.value) || 0;
+        const query = searchInput.value.toUpperCase();
+        ratesGrid.innerHTML = '';
+        
+        const sortedCodes = Object.keys(ratesData).sort();
+        
+        sortedCodes.forEach(code => {
+            const meta = currencyMetadata.find(m => m.code === code);
+            const nameMatch = meta ? meta.name.toUpperCase().includes(query) : false;
+            const codeMatch = code.includes(query);
+
+            if (query && !nameMatch && !codeMatch) return;
+
+            const calculatedValue = (ratesData[code] * amount);
+            const formattedValue = calculatedValue.toLocaleString(undefined, { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 4 
+            });
+
+            const symbol = meta ? meta.symbol : '';
+            const fullName = meta ? meta.name : '';
+            const card = document.createElement('div');
+            card.className = 'rate-card';
+            card.title = fullName;
+            card.innerHTML = `
+                <div class="currency-code">${code}</div>
+                <div class="currency-value">${symbol ? `<span class="symbol-highlight">${symbol}</span>` : ''}${formattedValue}</div>
+                <div class="currency-name">${fullName}</div>
+            `;
+            card.onclick = () => {
+                baseSelect.value = code;
+                fetchRates();
+            };
+            ratesGrid.appendChild(card);
+        });
+    }
+
+    baseSelect.onchange = fetchRates;
+    amountInput.oninput = renderRates;
+    searchInput.oninput = renderRates;
+    refreshBtn.onclick = fetchRates;
+
+    init();
+</script>
+</body>
+</html>

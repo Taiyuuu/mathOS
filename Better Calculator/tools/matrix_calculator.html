@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matrix Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/mathjs@12.4.1/lib/browser/math.js"></script>
+  <style>
+    * {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    *::-webkit-scrollbar {
+      display: none;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .toolbar {
+      background: #1d1d1e;
+      padding: 10px 16px;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      border-bottom: 1px solid #252528;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .dim-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #aaa;
+    }
+    input[type="number"] {
+      background: #2c2c31;
+      border: 1px solid #3a3a3d;
+      color: white;
+      border-radius: 4px;
+      padding: 4px 6px;
+      width: 40px;
+      outline: none;
+      text-align: center;
+    }
+    .container {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      align-items: center;
+    }
+    .matrices-layout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 40px;
+      justify-content: center;
+    }
+    .matrix-block {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    .matrix-title {
+      font-weight: 600;
+      color: #007aff;
+      font-size: 14px;
+    }
+    .matrix-grid {
+      display: grid;
+      gap: 6px;
+      background: rgba(255,255,255,0.05);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #333;
+    }
+    .cell-input {
+      width: 50px;
+      height: 35px;
+      background: #1a1a1c;
+      border: 1px solid #333;
+      color: white;
+      text-align: center;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .ops-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .btn-op {
+      background: #3a3a3d;
+      border: 1px solid #4a4a4d;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: 0.2s;
+    }
+    .btn-op:hover { background: #4a4a4d; }
+    .btn-op.primary { background: #007aff; border-color: #0a84ff; }
+    .btn-op.primary:hover { background: #0a84ff; }
+
+    #resultArea {
+      width: 100%;
+      max-width: 600px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 10px;
+      display: none;
+    }
+    .result-label { font-size: 12px; color: #888; margin-bottom: 10px; }
+    .result-content { font-family: "SF Mono", monospace; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="dim-control">
+      Matrix A: 
+      <input type="number" id="rowsA" value="2" min="1" max="5"> × 
+      <input type="number" id="colsA" value="2" min="1" max="5">
+    </div>
+    <div class="dim-control">
+      Matrix B: 
+      <input type="number" id="rowsB" value="2" min="1" max="5"> × 
+      <input type="number" id="colsB" value="2" min="1" max="5">
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="matrices-layout">
+      <div class="matrix-block">
+        <div class="matrix-title">Matrix A</div>
+        <div id="gridA" class="matrix-grid"></div>
+      </div>
+      <div class="matrix-block">
+        <div class="matrix-title">Matrix B</div>
+        <div id="gridB" class="matrix-grid"></div>
+      </div>
+    </div>
+
+    <div class="ops-bar">
+      <button class="btn-op primary" onclick="calculate('add')">A + B</button>
+      <button class="btn-op primary" onclick="calculate('sub')">A - B</button>
+      <button class="btn-op primary" onclick="calculate('mul')">A × B</button>
+      <button class="btn-op" onclick="calculate('det')">det(A)</button>
+      <button class="btn-op" onclick="calculate('inv')">inv(A)</button>
+      <button class="btn-op" onclick="calculate('trans')">Aᵀ</button>
+    </div>
+
+    <div id="resultArea">
+      <div class="result-label">RESULT</div>
+      <div id="resultContent" class="result-content"></div>
+    </div>
+  </div>
+
+  <script>
+    function createGrid(id, rows, cols) {
+      const grid = document.getElementById(id);
+      grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      grid.innerHTML = '';
+      for (let i = 0; i < rows * cols; i++) {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'cell-input';
+        input.value = '0';
+        grid.appendChild(input);
+      }
+    }
+
+    function getMatrix(id, rows, cols) {
+      const inputs = document.getElementById(id).getElementsByTagName('input');
+      const matrix = [];
+      for (let i = 0; i < rows; i++) {
+        matrix[i] = [];
+        for (let j = 0; j < cols; j++) {
+          matrix[i][j] = parseFloat(inputs[i * cols + j].value) || 0;
+        }
+      }
+      return matrix;
+    }
+
+    function displayResult(res) {
+      const area = document.getElementById('resultArea');
+      const content = document.getElementById('resultContent');
+      area.style.display = 'block';
+      
+      if (typeof res === 'number') {
+        content.innerHTML = `<span style="font-size: 24px; color: #007aff;">${math.format(res, {precision: 10})}</span>`;
+      } else {
+        // Matrix format
+        let html = '<table style="border-left: 2px solid white; border-right: 2px solid white; padding: 0 10px; border-collapse: collapse;">';
+        res.forEach(row => {
+          html += '<tr>';
+          row.forEach(val => {
+            html += `<td style="padding: 5px 15px; text-align: center;">${math.format(val, {precision: 6})}</td>`;
+          });
+          html += '</tr>';
+        });
+        html += '</table>';
+        content.innerHTML = html;
+      }
+    }
+
+    function calculate(op) {
+      try {
+        const rA = parseInt(document.getElementById('rowsA').value);
+        const cA = parseInt(document.getElementById('colsA').value);
+        const rB = parseInt(document.getElementById('rowsB').value);
+        const cB = parseInt(document.getElementById('colsB').value);
+
+        const A = getMatrix('gridA', rA, cA);
+        const B = getMatrix('gridB', rB, cB);
+
+        let res;
+        if (op === 'add') res = math.add(A, B);
+        else if (op === 'sub') res = math.subtract(A, B);
+        else if (op === 'mul') res = math.multiply(A, B);
+        else if (op === 'det') res = math.det(A);
+        else if (op === 'inv') res = math.inv(A);
+        else if (op === 'trans') res = math.transpose(A);
+
+        displayResult(res);
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    }
+
+    const inputs = ['rowsA', 'colsA', 'rowsB', 'colsB'];
+    inputs.forEach(id => {
+      document.getElementById(id).onchange = () => {
+        createGrid('gridA', parseInt(document.getElementById('rowsA').value), parseInt(document.getElementById('colsA').value));
+        createGrid('gridB', parseInt(document.getElementById('rowsB').value), parseInt(document.getElementById('colsB').value));
+      };
+    });
+
+    // Initial grids
+    createGrid('gridA', 2, 2);
+    createGrid('gridB', 2, 2);
+  </script>
+</body>
+</html>
